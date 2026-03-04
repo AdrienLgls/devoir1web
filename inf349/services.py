@@ -198,19 +198,9 @@ class OrderService:
         response_data, status_code = call_payment_service(credit_card_data, amount_charged)
 
         if status_code != 200:
-            if "errors" in response_data:
-                return None, {"errors": response_data["errors"]}
-            if "credit_card" in response_data:
-                return None, {"errors": {"credit_card": response_data["credit_card"]}}
             return None, response_data
 
-        order.credit_card = json.dumps({
-            "name": credit_card_data.get("name", ""),
-            "first_digits": credit_card_data.get("number", "")[:4],
-            "last_digits": credit_card_data.get("number", "")[-4:],
-            "expiration_year": credit_card_data.get("expiration_year"),
-            "expiration_month": credit_card_data.get("expiration_month"),
-        })
+        order.credit_card = json.dumps(response_data.get("credit_card", {}))
         order.transaction = json.dumps(response_data.get("transaction", {}))
         order.paid = True
         order.save()

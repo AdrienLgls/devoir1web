@@ -11,7 +11,7 @@ from peewee import (
     TextField,
 )
 
-db = SqliteDatabase("inf349.db")
+db = SqliteDatabase(None)
 
 
 class BaseModel(Model):
