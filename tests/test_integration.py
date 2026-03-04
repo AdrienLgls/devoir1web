@@ -83,7 +83,7 @@ class TestGetOrder:
         location = response.headers["Location"]
         response = client.get(location)
         data = response.get_json()
-        assert data["order"]["shipping_price"] == 500
+        assert data["order"]["shipping_price"] == 5
 
 
 class TestUpdateShippingInfo:
@@ -220,6 +220,15 @@ class TestPayment:
         assert response.status_code == 422
         data = response.get_json()
         assert data["errors"]["credit_card"]["code"] == "card-declined"
+
+    @patch("inf349.services.call_payment_service")
+    def test_payment_service_error_empty_body(self, mock_pay, client):
+        mock_pay.return_value = ({}, 500)
+        location = self._setup_order_for_payment(client)
+        response = client.put(location, json=self._valid_credit_card())
+        assert response.status_code == 422
+        data = response.get_json()
+        assert data["errors"]["payment"]["code"] == "payment-service-error"
 
     @patch("inf349.services.call_payment_service")
     def test_already_paid_returns_422(self, mock_pay, client):

@@ -60,13 +60,13 @@ def register_routes(app):
 
         if has_order_info:
             result, error = OrderService.update_shipping_info(order, data["order"])
-            if error:
+            if error is not None:
                 return jsonify(error), 422
             return jsonify(result.to_dict())
 
         if has_credit_card:
             result, error = OrderService.process_payment(order, data["credit_card"])
-            if error:
+            if error is not None:
                 return jsonify(error), 422
             return jsonify(result.to_dict())
 

@@ -3,8 +3,8 @@ import urllib.request
 
 from inf349.models import Product, Order
 
-PRODUCTS_URL = "http://dimensweb.uqac.ca/~jgnault/shops/products/"
-PAYMENT_URL = "http://dimensweb.uqac.ca/~jgnault/shops/pay/"
+PRODUCTS_URL = "https://dimensweb.uqac.ca/~jgnault/shops/products/"
+PAYMENT_URL = "https://dimensweb.uqac.ca/~jgnault/shops/pay/"
 
 TAX_RATES = {
     "QC": 0.15,
@@ -39,16 +39,17 @@ def call_payment_service(credit_card, amount_charged):
         with urllib.request.urlopen(req) as response:
             return json.loads(response.read().decode()), response.status
     except urllib.error.HTTPError as e:
-        return json.loads(e.read().decode()), e.code
+        body = e.read().decode()
+        return json.loads(body) if body else {}, e.code
 
 
 def calculate_shipping_price(weight):
     if weight <= 500:
-        return 500
+        return 5
     elif weight <= 2000:
-        return 1000
+        return 10
     else:
-        return 2500
+        return 25
 
 
 class ProductService:
@@ -198,6 +199,15 @@ class OrderService:
         response_data, status_code = call_payment_service(credit_card_data, amount_charged)
 
         if status_code != 200:
+            if not response_data:
+                response_data = {
+                    "errors": {
+                        "payment": {
+                            "code": "payment-service-error",
+                            "name": "Le service de paiement distant a retourn\u00e9 une erreur",
+                        }
+                    }
+                }
             return None, response_data
 
         order.credit_card = json.dumps(response_data.get("credit_card", {}))

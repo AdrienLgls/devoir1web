@@ -3,18 +3,18 @@ from inf349.services import calculate_shipping_price, TAX_RATES
 
 class TestCalculateShippingPrice:
     def test_under_500g(self):
-        assert calculate_shipping_price(100) == 500
-        assert calculate_shipping_price(499) == 500
-        assert calculate_shipping_price(500) == 500
+        assert calculate_shipping_price(100) == 5
+        assert calculate_shipping_price(499) == 5
+        assert calculate_shipping_price(500) == 5
 
     def test_between_500g_and_2kg(self):
-        assert calculate_shipping_price(501) == 1000
-        assert calculate_shipping_price(1000) == 1000
-        assert calculate_shipping_price(2000) == 1000
+        assert calculate_shipping_price(501) == 10
+        assert calculate_shipping_price(1000) == 10
+        assert calculate_shipping_price(2000) == 10
 
     def test_over_2kg(self):
-        assert calculate_shipping_price(2001) == 2500
-        assert calculate_shipping_price(5000) == 2500
+        assert calculate_shipping_price(2001) == 25
+        assert calculate_shipping_price(5000) == 25
 
 
 class TestTaxRates:
