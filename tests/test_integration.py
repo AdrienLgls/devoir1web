@@ -204,9 +204,11 @@ class TestPayment:
     def test_declined_card(self, mock_pay, client):
         mock_pay.return_value = (
             {
-                "credit_card": {
-                    "code": "card-declined",
-                    "name": "La carte de cr\u00e9dit a \u00e9t\u00e9 d\u00e9clin\u00e9e.",
+                "errors": {
+                    "credit_card": {
+                        "code": "card-declined",
+                        "name": "La carte de cr\u00e9dit a \u00e9t\u00e9 d\u00e9clin\u00e9e.",
+                    }
                 }
             },
             422,
@@ -217,7 +219,7 @@ class TestPayment:
         response = client.put(location, json=card)
         assert response.status_code == 422
         data = response.get_json()
-        assert data["credit_card"]["code"] == "card-declined"
+        assert data["errors"]["credit_card"]["code"] == "card-declined"
 
     @patch("inf349.services.call_payment_service")
     def test_already_paid_returns_422(self, mock_pay, client):

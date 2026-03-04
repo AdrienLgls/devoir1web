@@ -3,7 +3,7 @@ from flask import Flask
 
 from inf349.models import db, Product, Order
 from inf349.services import fetch_products
-from inf349.views import bp
+from inf349.views import register_routes
 
 
 def _load_products():
@@ -28,7 +28,7 @@ def create_app(database_path="inf349.db"):
 
     db.init(database_path)
 
-    app.register_blueprint(bp)
+    register_routes(app)
 
     @app.before_request
     def before_request():
@@ -41,9 +41,10 @@ def create_app(database_path="inf349.db"):
 
     @app.cli.command("init-db")
     def init_db():
-        """Initialise la base de donnees."""
+        """Initialise la base de donnees et recupere les produits."""
         db.connect(reuse_if_open=True)
         db.create_tables([Product, Order])
+        _load_products()
         db.close()
         click.echo("Base de donnees initialisee.")
 
