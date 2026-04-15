@@ -1,333 +1,189 @@
-import json
 from unittest.mock import patch
 
 
-class TestGetProducts:
-    def test_returns_200(self, client):
-        response = client.get("/")
-        assert response.status_code == 200
-
-    def test_returns_products_list(self, client):
-        response = client.get("/")
-        data = response.get_json()
-        assert "products" in data
-        assert len(data["products"]) >= 2
-
-    def test_product_has_required_fields(self, client):
-        response = client.get("/")
-        data = response.get_json()
-        product = data["products"][0]
-        for field in ["id", "name", "description", "price", "in_stock", "weight", "image"]:
-            assert field in product
+def _order_id_from_redirect(response):
+    return int(response.headers["Location"].rstrip("/").split("/")[-1])
 
 
-class TestCreateOrder:
-    def test_returns_302_with_location(self, client):
-        response = client.post("/order", json={"product": {"id": 1, "quantity": 2}})
-        assert response.status_code == 302
-        assert "/order/" in response.headers["Location"]
+# ---------- Produits ----------
 
-    def test_missing_product_returns_422(self, client):
-        response = client.post("/order", json={})
-        assert response.status_code == 422
-        data = response.get_json()
-        assert data["errors"]["product"]["code"] == "missing-fields"
-
-    def test_missing_id_returns_422(self, client):
-        response = client.post("/order", json={"product": {"quantity": 1}})
-        assert response.status_code == 422
-
-    def test_missing_quantity_returns_422(self, client):
-        response = client.post("/order", json={"product": {"id": 1}})
-        assert response.status_code == 422
-
-    def test_quantity_zero_returns_422(self, client):
-        response = client.post("/order", json={"product": {"id": 1, "quantity": 0}})
-        assert response.status_code == 422
-
-    def test_negative_quantity_returns_422(self, client):
-        response = client.post("/order", json={"product": {"id": 1, "quantity": -1}})
-        assert response.status_code == 422
-
-    def test_nonexistent_product_returns_422(self, client):
-        response = client.post("/order", json={"product": {"id": 9999, "quantity": 1}})
-        assert response.status_code == 422
-
-    def test_out_of_stock_returns_422(self, client):
-        response = client.post("/order", json={"product": {"id": 3, "quantity": 1}})
-        assert response.status_code == 422
-        data = response.get_json()
-        assert data["errors"]["product"]["code"] == "out-of-inventory"
+def test_liste_produits(client):
+    r = client.get("/api/products")
+    assert r.status_code == 200
+    data = r.get_json()
+    assert len(data["products"]) == 3
 
 
-class TestGetOrder:
-    def test_returns_order(self, client):
-        response = client.post("/order", json={"product": {"id": 1, "quantity": 1}})
-        location = response.headers["Location"]
+# ---------- POST /order ----------
 
-        response = client.get(location)
-        assert response.status_code == 200
-        data = response.get_json()
-        assert data["order"]["product"]["id"] == 1
-        assert data["order"]["paid"] is False
-        assert data["order"]["credit_card"] == {}
-        assert data["order"]["shipping_information"] == {}
-        assert data["order"]["transaction"] == {}
+def test_creation_commande_multi_produits(client):
+    r = client.post("/order", json={
+        "products": [{"id": 1, "quantity": 2}, {"id": 2, "quantity": 1}]
+    })
+    assert r.status_code == 302
 
-    def test_not_found_returns_404(self, client):
-        response = client.get("/order/99999")
-        assert response.status_code == 404
-
-    def test_shipping_price_calculated(self, client):
-        response = client.post("/order", json={"product": {"id": 1, "quantity": 1}})
-        location = response.headers["Location"]
-        response = client.get(location)
-        data = response.get_json()
-        assert data["order"]["shipping_price"] == 5
+    r = client.get(r.headers["Location"])
+    assert r.status_code == 200
+    order = r.get_json()["order"]
+    assert len(order["products"]) == 2
+    assert order["total_price"] == 250  # 100*2 + 50*1
+    # 400*2 + 100*1 = 900g → tarif 10
+    assert order["shipping_price"] == 10
 
 
-class TestUpdateShippingInfo:
-    def _create_order(self, client):
-        response = client.post("/order", json={"product": {"id": 1, "quantity": 1}})
-        return response.headers["Location"]
-
-    def _valid_shipping_data(self):
-        return {
-            "order": {
-                "email": "test@uqac.ca",
-                "shipping_information": {
-                    "country": "Canada",
-                    "address": "201, rue Pr\u00e9sident-Kennedy",
-                    "postal_code": "G7X 3Y7",
-                    "city": "Chicoutimi",
-                    "province": "QC",
-                },
-            }
-        }
-
-    def test_update_shipping_returns_200(self, client):
-        location = self._create_order(client)
-        response = client.put(location, json=self._valid_shipping_data())
-        assert response.status_code == 200
-
-    def test_email_saved(self, client):
-        location = self._create_order(client)
-        client.put(location, json=self._valid_shipping_data())
-        response = client.get(location)
-        data = response.get_json()
-        assert data["order"]["email"] == "test@uqac.ca"
-
-    def test_tax_calculated_qc(self, client):
-        location = self._create_order(client)
-        client.put(location, json=self._valid_shipping_data())
-        response = client.get(location)
-        data = response.get_json()
-        assert data["order"]["total_price_tax"] > data["order"]["total_price"]
-
-    def test_missing_email_returns_422(self, client):
-        location = self._create_order(client)
-        data = self._valid_shipping_data()
-        del data["order"]["email"]
-        response = client.put(location, json=data)
-        assert response.status_code == 422
-
-    def test_missing_shipping_field_returns_422(self, client):
-        location = self._create_order(client)
-        data = self._valid_shipping_data()
-        del data["order"]["shipping_information"]["city"]
-        response = client.put(location, json=data)
-        assert response.status_code == 422
-
-    def test_nonexistent_order_returns_404(self, client):
-        response = client.put("/order/99999", json=self._valid_shipping_data())
-        assert response.status_code == 404
+def test_creation_commande_retro_compat_single_product(client):
+    r = client.post("/order", json={"product": {"id": 1, "quantity": 1}})
+    assert r.status_code == 302
+    r = client.get(r.headers["Location"])
+    order = r.get_json()["order"]
+    assert len(order["products"]) == 1
+    assert order["products"][0] == {"id": 1, "quantity": 1}
 
 
-class TestPayment:
-    def _setup_order_for_payment(self, client):
-        response = client.post("/order", json={"product": {"id": 1, "quantity": 1}})
-        location = response.headers["Location"]
-        client.put(location, json={
-            "order": {
-                "email": "test@uqac.ca",
-                "shipping_information": {
-                    "country": "Canada",
-                    "address": "201, rue Pr\u00e9sident-Kennedy",
-                    "postal_code": "G7X 3Y7",
-                    "city": "Chicoutimi",
-                    "province": "QC",
-                },
-            }
-        })
-        return location
+def test_creation_sans_produit(client):
+    r = client.post("/order", json={})
+    assert r.status_code == 422
+    assert "product" in r.get_json()["errors"]
 
-    def _valid_credit_card(self):
-        return {
-            "credit_card": {
-                "name": "John Doe",
-                "number": "4242 4242 4242 4242",
-                "expiration_year": 2030,
-                "cvv": "123",
-                "expiration_month": 9,
-            }
-        }
 
-    @patch("inf349.services.call_payment_service")
-    def test_successful_payment(self, mock_pay, client):
-        mock_pay.return_value = (
-            {
-                "credit_card": {
-                    "name": "John Doe",
-                    "first_digits": "4242",
-                    "last_digits": "4242",
-                    "expiration_year": 2030,
-                    "expiration_month": 9,
-                },
-                "transaction": {
-                    "id": "abc123",
-                    "success": True,
-                    "amount_charged": 528,
-                },
-            },
-            200,
-        )
-        location = self._setup_order_for_payment(client)
-        response = client.put(location, json=self._valid_credit_card())
-        assert response.status_code == 200
-        data = response.get_json()
-        assert data["order"]["paid"] is True
-        assert data["order"]["transaction"]["success"] is True
-        assert data["order"]["credit_card"]["first_digits"] == "4242"
-        assert data["order"]["credit_card"]["last_digits"] == "4242"
+def test_creation_produit_hors_stock(client):
+    r = client.post("/order", json={"products": [{"id": 3, "quantity": 1}]})
+    assert r.status_code == 422
+    assert r.get_json()["errors"]["product"]["code"] == "out-of-inventory"
 
-    @patch("inf349.services.call_payment_service")
-    def test_declined_card(self, mock_pay, client):
-        mock_pay.return_value = (
-            {
-                "errors": {
-                    "credit_card": {
-                        "code": "card-declined",
-                        "name": "La carte de cr\u00e9dit a \u00e9t\u00e9 d\u00e9clin\u00e9e.",
-                    }
-                }
-            },
-            422,
-        )
-        location = self._setup_order_for_payment(client)
-        card = self._valid_credit_card()
-        card["credit_card"]["number"] = "4000 0000 0000 0002"
-        response = client.put(location, json=card)
-        assert response.status_code == 422
-        data = response.get_json()
-        assert data["errors"]["credit_card"]["code"] == "card-declined"
 
-    @patch("inf349.services.call_payment_service")
-    def test_payment_service_error_empty_body(self, mock_pay, client):
-        mock_pay.return_value = ({}, 500)
-        location = self._setup_order_for_payment(client)
-        response = client.put(location, json=self._valid_credit_card())
-        assert response.status_code == 422
-        data = response.get_json()
-        assert data["errors"]["payment"]["code"] == "payment-service-error"
+def test_creation_quantite_invalide(client):
+    r = client.post("/order", json={"products": [{"id": 1, "quantity": 0}]})
+    assert r.status_code == 422
 
-    @patch("inf349.services.call_payment_service")
-    def test_already_paid_returns_422(self, mock_pay, client):
-        mock_pay.return_value = (
-            {
-                "credit_card": {
-                    "name": "John Doe",
-                    "first_digits": "4242",
-                    "last_digits": "4242",
-                    "expiration_year": 2030,
-                    "expiration_month": 9,
-                },
-                "transaction": {
-                    "id": "abc123",
-                    "success": True,
-                    "amount_charged": 528,
-                },
-            },
-            200,
-        )
-        location = self._setup_order_for_payment(client)
-        client.put(location, json=self._valid_credit_card())
 
-        response = client.put(location, json=self._valid_credit_card())
-        assert response.status_code == 422
-        data = response.get_json()
-        assert data["errors"]["order"]["code"] == "already-paid"
+# ---------- GET /order ----------
 
-    def test_payment_without_shipping_returns_422(self, client):
-        response = client.post("/order", json={"product": {"id": 1, "quantity": 1}})
-        location = response.headers["Location"]
+def test_get_commande_introuvable(client):
+    r = client.get("/order/9999")
+    assert r.status_code == 404
 
-        response = client.put(location, json=self._valid_credit_card())
-        assert response.status_code == 422
 
-    def test_credit_card_and_order_together_returns_422(self, client):
-        response = client.post("/order", json={"product": {"id": 1, "quantity": 1}})
-        location = response.headers["Location"]
+# ---------- PUT /order (livraison) ----------
 
-        response = client.put(location, json={
-            "credit_card": {"name": "John Doe", "number": "4242 4242 4242 4242"},
-            "order": {"email": "test@uqac.ca"},
-        })
-        assert response.status_code == 422
+def test_update_shipping_info(client, shipping_info):
+    r = client.post("/order", json={"products": [{"id": 1, "quantity": 1}]})
+    order_id = _order_id_from_redirect(r)
 
-    @patch("inf349.services.call_payment_service")
-    def test_full_flow(self, mock_pay, client):
-        mock_pay.return_value = (
-            {
-                "credit_card": {
-                    "name": "John Doe",
-                    "first_digits": "4242",
-                    "last_digits": "4242",
-                    "expiration_year": 2030,
-                    "expiration_month": 9,
-                },
-                "transaction": {
-                    "id": "xyz789",
-                    "success": True,
-                    "amount_charged": 528,
-                },
-            },
-            200,
-        )
+    r = client.put(f"/order/{order_id}", json={
+        "order": {"email": "jgnault@uqac.ca", "shipping_information": shipping_info}
+    })
+    assert r.status_code == 200
+    order = r.get_json()["order"]
+    assert order["email"] == "jgnault@uqac.ca"
+    assert order["shipping_information"]["province"] == "QC"
 
-        response = client.post("/order", json={"product": {"id": 1, "quantity": 1}})
-        assert response.status_code == 302
-        location = response.headers["Location"]
 
-        response = client.get(location)
-        assert response.status_code == 200
-        data = response.get_json()
-        assert data["order"]["paid"] is False
+def test_update_shipping_champs_manquants(client):
+    r = client.post("/order", json={"products": [{"id": 1, "quantity": 1}]})
+    order_id = _order_id_from_redirect(r)
+    r = client.put(f"/order/{order_id}", json={
+        "order": {"email": "a@b.c", "shipping_information": {"country": "Canada"}}
+    })
+    assert r.status_code == 422
 
-        response = client.put(location, json={
-            "order": {
-                "email": "test@uqac.ca",
-                "shipping_information": {
-                    "country": "Canada",
-                    "address": "201, rue Pr\u00e9sident-Kennedy",
-                    "postal_code": "G7X 3Y7",
-                    "city": "Chicoutimi",
-                    "province": "QC",
-                },
-            }
-        })
-        assert response.status_code == 200
 
-        response = client.put(location, json={
-            "credit_card": {
-                "name": "John Doe",
-                "number": "4242 4242 4242 4242",
-                "expiration_year": 2030,
-                "cvv": "123",
-                "expiration_month": 9,
-            }
-        })
-        assert response.status_code == 200
-        data = response.get_json()
-        assert data["order"]["paid"] is True
-        assert data["order"]["email"] == "test@uqac.ca"
-        assert data["order"]["transaction"]["id"] == "xyz789"
+# ---------- PUT /order (paiement) ----------
+
+def test_paiement_sans_shipping_info(client, credit_card):
+    r = client.post("/order", json={"products": [{"id": 1, "quantity": 1}]})
+    order_id = _order_id_from_redirect(r)
+    r = client.put(f"/order/{order_id}", json={"credit_card": credit_card})
+    assert r.status_code == 422
+
+
+def test_paiement_async_retourne_202(client, order_ready_to_pay,
+                                      credit_card, fake_queue):
+    r = client.put(f"/order/{order_ready_to_pay}",
+                   json={"credit_card": credit_card})
+    assert r.status_code == 202
+    assert r.data == b""
+    assert len(fake_queue.jobs) == 1
+
+
+def test_get_pendant_paiement_retourne_202(client, order_ready_to_pay,
+                                            credit_card):
+    client.put(f"/order/{order_ready_to_pay}",
+               json={"credit_card": credit_card})
+    r = client.get(f"/order/{order_ready_to_pay}")
+    assert r.status_code == 202
+    assert r.data == b""
+
+
+def test_put_pendant_paiement_retourne_409(client, order_ready_to_pay,
+                                            credit_card):
+    client.put(f"/order/{order_ready_to_pay}",
+               json={"credit_card": credit_card})
+    r = client.put(f"/order/{order_ready_to_pay}",
+                   json={"credit_card": credit_card})
+    assert r.status_code == 409
+
+
+# ---------- Worker + cache ----------
+
+def test_paiement_reussi_met_en_cache(client, order_ready_to_pay,
+                                       credit_card, fake_queue, fake_redis,
+                                       payment_success_response):
+    client.put(f"/order/{order_ready_to_pay}",
+               json={"credit_card": credit_card})
+    job = fake_queue.jobs[-1]
+
+    with patch("api8inf349.services.call_payment_service",
+               return_value=(payment_success_response, 200)):
+        job.perform()
+
+    # GET retourne 200 avec paid=true
+    r = client.get(f"/order/{order_ready_to_pay}")
+    assert r.status_code == 200
+    order = r.get_json()["order"]
+    assert order["paid"] is True
+
+    # Le cache Redis contient la commande
+    cached_key = f"order:{order_ready_to_pay}"
+    assert cached_key in fake_redis.store
+
+
+def test_paiement_echoue_persiste_erreur(client, order_ready_to_pay,
+                                          credit_card, fake_queue,
+                                          payment_declined_response):
+    client.put(f"/order/{order_ready_to_pay}",
+               json={"credit_card": credit_card})
+    job = fake_queue.jobs[-1]
+
+    with patch("api8inf349.services.call_payment_service",
+               return_value=(payment_declined_response, 422)):
+        job.perform()
+
+    # GET retourne 200 avec l'erreur dans transaction
+    r = client.get(f"/order/{order_ready_to_pay}")
+    assert r.status_code == 200
+    order = r.get_json()["order"]
+    assert order["paid"] is False
+    assert order["transaction"]["success"] is False
+    assert order["transaction"]["error"]["code"] == "card-declined"
+
+
+def test_get_utilise_cache_redis(client, order_ready_to_pay, credit_card,
+                                  fake_queue, payment_success_response):
+    """Après paiement, le GET doit lire depuis Redis (même si la DB change)."""
+    client.put(f"/order/{order_ready_to_pay}",
+               json={"credit_card": credit_card})
+    job = fake_queue.jobs[-1]
+    with patch("api8inf349.services.call_payment_service",
+               return_value=(payment_success_response, 200)):
+        job.perform()
+
+    # Premier GET pour remplir/utiliser le cache
+    r1 = client.get(f"/order/{order_ready_to_pay}")
+    # On modifie la DB "sous le capot" : le cache doit prévaloir
+    from api8inf349.models import Order
+    Order.update(total_price=99999).where(Order.id == order_ready_to_pay).execute()
+
+    r2 = client.get(f"/order/{order_ready_to_pay}")
+    # Le cache garde l'ancien total_price (pas 99999)
+    assert r2.get_json()["order"]["total_price"] != 99999

@@ -1,0 +1,35 @@
+{% extends "layout.html" %}
+
+{% block title %}Produits disponibles{% endblock %}
+
+{% block body %}
+<h1>Produits disponibles</h1>
+
+<form method="post" action="/order">
+    <table>
+        <tr>
+            <th>ID</th><th>Nom</th><th>Prix</th><th>Poids (g)</th><th>En stock</th><th>Quantité</th>
+        </tr>
+        {% for p in products %}
+        <tr>
+            <td>{{ p.id }}</td>
+            <td>{{ p.name }}</td>
+            <td>{{ p.price }}</td>
+            <td>{{ p.weight }}</td>
+            <td>{{ "oui" if p.in_stock else "non" }}</td>
+            <td>
+                <input type="hidden" name="product_id" value="{{ p.id }}">
+                <input type="number" name="quantity" value="0" min="0" max="99">
+            </td>
+        </tr>
+        {% endfor %}
+    </table>
+    <button type="submit">Créer la commande</button>
+</form>
+
+<h2>Rechercher une commande</h2>
+<form method="get" action="/order-lookup">
+    <label>ID de la commande : <input type="number" name="order_id" required></label>
+    <button type="submit">Voir</button>
+</form>
+{% endblock %}

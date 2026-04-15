@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="utf-8">
+    <title>{% block title %}API 8INF349{% endblock %}</title>
+    <style>
+        body { font-family: sans-serif; max-width: 960px; margin: 2em auto; padding: 0 1em; }
+        table { border-collapse: collapse; width: 100%; margin-bottom: 1em; }
+        th, td { border: 1px solid #ccc; padding: 0.4em 0.6em; text-align: left; }
+        th { background: #f2f2f2; }
+        form { margin-bottom: 2em; padding: 1em; border: 1px solid #ddd; }
+        label { display: block; margin: 0.3em 0; }
+        input, select { padding: 0.3em; margin-left: 0.3em; }
+        .error { background: #fdd; padding: 1em; border: 1px solid #c00; }
+        nav { margin-bottom: 2em; }
+        nav a { margin-right: 1em; }
+    </style>
+</head>
+<body>
+    <nav>
+        <a href="/">Accueil</a>
+    </nav>
+    {% block body %}{% endblock %}
+</body>
+</html>

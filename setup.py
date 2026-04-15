@@ -1,16 +1,13 @@
 from setuptools import setup, find_packages
 
 setup(
-    name="inf349",
+    name="api8inf349",
     packages=find_packages(),
     install_requires=[
         "flask",
         "peewee",
+        "psycopg2-binary",
+        "redis",
+        "rq",
     ],
-    extras_require={
-        "test": [
-            "pytest",
-            "pytest-flask",
-        ],
-    },
 )

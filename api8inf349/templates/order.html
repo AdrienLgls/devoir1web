@@ -1,0 +1,54 @@
+{% extends "layout.html" %}
+
+{% block title %}Commande #{{ order.id }}{% endblock %}
+
+{% block body %}
+<h1>Commande #{{ order.id }}</h1>
+
+<p><strong>Total :</strong> {{ order.total_price }} | <strong>Livraison :</strong> {{ order.shipping_price }}</p>
+<p><strong>Payée :</strong> {{ "oui" if order.paid else "non" }}</p>
+
+<h2>Produits</h2>
+<table>
+    <tr><th>ID</th><th>Quantité</th></tr>
+    {% for p in order.products %}
+    <tr><td>{{ p.id }}</td><td>{{ p.quantity }}</td></tr>
+    {% endfor %}
+</table>
+
+{% if not order.paid %}
+<h2>Informations de livraison</h2>
+<form method="post" action="/order/{{ order.id }}/shipping">
+    <label>Email : <input type="email" name="email" value="{{ order.email or '' }}" required></label>
+    <label>Pays : <input name="country" value="{{ order.shipping_information.country or '' }}" required></label>
+    <label>Adresse : <input name="address" value="{{ order.shipping_information.address or '' }}" required></label>
+    <label>Code postal : <input name="postal_code" value="{{ order.shipping_information.postal_code or '' }}" required></label>
+    <label>Ville : <input name="city" value="{{ order.shipping_information.city or '' }}" required></label>
+    <label>Province :
+        <select name="province" required>
+            {% for prov in ["QC","ON","AB","BC","NS"] %}
+            <option value="{{ prov }}" {% if order.shipping_information.province == prov %}selected{% endif %}>{{ prov }}</option>
+            {% endfor %}
+        </select>
+    </label>
+    <button type="submit">Enregistrer</button>
+</form>
+
+{% if order.email and order.shipping_information %}
+<h2>Paiement</h2>
+<form method="post" action="/order/{{ order.id }}/pay">
+    <label>Nom : <input name="name" required></label>
+    <label>Numéro : <input name="number" value="4242 4242 4242 4242" required></label>
+    <label>Mois expiration : <input type="number" name="expiration_month" min="1" max="12" required></label>
+    <label>Année expiration : <input type="number" name="expiration_year" min="2024" required></label>
+    <label>CVV : <input name="cvv" required></label>
+    <button type="submit">Payer</button>
+</form>
+{% endif %}
+{% endif %}
+
+{% if order.transaction %}
+<h2>Transaction</h2>
+<pre>{{ order.transaction | tojson(indent=2) }}</pre>
+{% endif %}
+{% endblock %}

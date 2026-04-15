@@ -17,3 +17,8 @@ env/
 .coverage
 htmlcov/
 instance/
+
+# Fichiers de cours et sujet (non liés au code)
+*.pdf
+cours/
+equipe.txt

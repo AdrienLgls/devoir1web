@@ -1,0 +1,11 @@
+{% extends "layout.html" %}
+
+{% block title %}Erreur{% endblock %}
+
+{% block body %}
+<h1>Erreur</h1>
+<div class="error">
+<pre>{{ error | tojson(indent=2) }}</pre>
+</div>
+<p><a href="/">Retour à l'accueil</a></p>
+{% endblock %}
