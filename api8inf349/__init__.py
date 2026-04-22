@@ -9,6 +9,12 @@ from api8inf349.cache import get_redis
 from api8inf349.queue import get_queue
 
 
+def _sanitize_text(value):
+    if isinstance(value, str):
+        return value.replace("\x00", "")
+    return value
+
+
 def _load_products():
     """Récupère les produits du service distant et les persiste en DB."""
     products = fetch_products()
@@ -16,12 +22,12 @@ def _load_products():
         Product.get_or_create(
             id=p["id"],
             defaults={
-                "name": p["name"],
-                "description": p.get("description", ""),
+                "name": _sanitize_text(p["name"]),
+                "description": _sanitize_text(p.get("description", "")),
                 "price": p["price"],
                 "in_stock": p["in_stock"],
                 "weight": p["weight"],
-                "image": p.get("image", ""),
+                "image": _sanitize_text(p.get("image", "")),
             },
         )
 

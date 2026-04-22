@@ -148,6 +148,58 @@ def test_paiement_reussi_met_en_cache(client, order_ready_to_pay,
     assert cached_key in fake_redis.store
 
 
+def test_paiement_reussi_normalise_transaction_success(client,
+                                                        order_ready_to_pay,
+                                                        credit_card,
+                                                        fake_queue,
+                                                        payment_success_response):
+    client.put(f"/order/{order_ready_to_pay}",
+               json={"credit_card": credit_card})
+    job = fake_queue.jobs[-1]
+    payment_response = {
+        **payment_success_response,
+        "transaction": {
+            **payment_success_response["transaction"],
+            "success": "true",
+        },
+    }
+
+    with patch("api8inf349.services.call_payment_service",
+               return_value=(payment_response, 200)):
+        job.perform()
+
+    r = client.get(f"/order/{order_ready_to_pay}")
+    order = r.get_json()["order"]
+    assert order["transaction"]["success"] is True
+
+
+def test_paiement_reussi_normalise_credit_card_digits(client,
+                                                       order_ready_to_pay,
+                                                       credit_card,
+                                                       fake_queue,
+                                                       payment_success_response):
+    client.put(f"/order/{order_ready_to_pay}",
+               json={"credit_card": credit_card})
+    job = fake_queue.jobs[-1]
+    payment_response = {
+        **payment_success_response,
+        "credit_card": {
+            **payment_success_response["credit_card"],
+            "first_digits": 4242,
+            "last_digits": 4242,
+        },
+    }
+
+    with patch("api8inf349.services.call_payment_service",
+               return_value=(payment_response, 200)):
+        job.perform()
+
+    r = client.get(f"/order/{order_ready_to_pay}")
+    order = r.get_json()["order"]
+    assert order["credit_card"]["first_digits"] == "4242"
+    assert order["credit_card"]["last_digits"] == "4242"
+
+
 def test_paiement_echoue_persiste_erreur(client, order_ready_to_pay,
                                           credit_card, fake_queue,
                                           payment_declined_response):

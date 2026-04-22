@@ -22,7 +22,7 @@ pip install -r requirements.txt
 ## Lancer les dépendances avec Docker
 
 ```bash
-docker-compose up -d
+docker compose up -d
 ```
 
 Cela démarre PostgreSQL (port 5432) et Redis (port 6379).

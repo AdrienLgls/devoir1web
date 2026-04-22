@@ -57,6 +57,30 @@ def _missing_product_error():
     }
 
 
+def _normalize_transaction(transaction):
+    if not isinstance(transaction, dict):
+        return {}
+
+    normalized = dict(transaction)
+    success = normalized.get("success")
+    if isinstance(success, str):
+        normalized["success"] = success.lower() == "true"
+
+    return normalized
+
+
+def _normalize_credit_card(credit_card):
+    if not isinstance(credit_card, dict):
+        return {}
+
+    normalized = dict(credit_card)
+    for field in ["first_digits", "last_digits"]:
+        if field in normalized and normalized[field] is not None:
+            normalized[field] = str(normalized[field])
+
+    return normalized
+
+
 class ProductService:
     @classmethod
     def get_all(cls):
@@ -208,8 +232,12 @@ def process_payment_task(order_id, credit_card):
         response_data, status_code = call_payment_service(credit_card, amount_charged)
 
         if status_code == 200:
-            order.credit_card = json.dumps(response_data.get("credit_card", {}))
-            order.transaction = json.dumps(response_data.get("transaction", {}))
+            order.credit_card = json.dumps(
+                _normalize_credit_card(response_data.get("credit_card", {}))
+            )
+            order.transaction = json.dumps(
+                _normalize_transaction(response_data.get("transaction", {}))
+            )
             order.paid = True
             order.processing = False
             order.save()
